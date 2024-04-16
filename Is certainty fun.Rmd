@@ -1,0 +1,564 @@
+---
+title: "Is Competitive Balance fun to watch?"
+author: "Joey Lewis"
+date: "`r Sys.Date()`"
+fontsize: 12pt
+output: tufte::tufte_html
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(error = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+```
+
+```{r}
+rm(list = ls())
+library(tufte)
+library(tidyverse)
+library(tidyr)
+library(stargazer)
+library(DescTools)
+library(gtsummary)
+library(rvest)
+library(xml2)
+library(httr)
+library(rvest)
+library(dplyr)
+library(ggthemes)
+library(kableExtra)
+library(broom)
+
+
+years = 2003:2023
+```
+
+```{r attendance scraping}
+select_word = function(x){
+  if(str_count(x," ") == 0){
+    return(x)
+  }
+  else{
+    j = str_split(x," ")[[1]]
+    return(j[length(j)])
+  }
+}
+
+select_wins = function(x){
+    j = str_split(x,"-")[[1]]
+    return(j[1])
+  }
+
+
+
+if (file.exists('attendance.csv')){
+  attendance=read.csv('attendance.csv')
+} else {
+  attendance = data.frame()
+
+for (i in years){
+  url = sprintf('https://www.espn.com/nba/attendance/_/year/%s', i)
+  response <- GET(url)
+  html_content <- content(response)
+  t = html_table(html_content)[[1]]
+  t = t[,1:6] 
+  colnames(t) = as.character(t[2,])
+  t = t %>% slice(-(1:2))
+  t = t[1:30,] %>% mutate(year = i)
+  attendance = bind_rows(attendance,t)
+}
+attendance = attendance %>% 
+  filter(!is.na(TEAM)) %>% 
+  mutate(Team = map_chr(TEAM, select_word))%>% 
+  dplyr::select(Team, PCT, year) %>% 
+  mutate(PCT = as.numeric(PCT)) %>% 
+  filter(PCT < 150)
+write.csv(attendance,'attendance.csv',row.names=FALSE)
+}
+
+```
+
+```{r odds scraping}
+#It seems that it worked from Joey's wifi but not from Daisy
+if (file.exists('odds.csv')){
+  odds=read.csv('odds.csv')
+} else {
+  odds = data.frame()
+  
+  for (i in years){
+  url = sprintf('https://www.basketball-reference.com/leagues/NBA_%s_preseason_odds.html', i)
+    response <- GET(url)
+    html_content <- content(response)
+    t = html_table(html_content)[[1]]
+    names = html_content %>% html_element('table thead') %>% html_elements('th') %>% html_text()
+    colnames(t) = names
+    t = t[,-3] %>% mutate(year = i)
+  
+    odds = bind_rows(odds,t)
+    
+  }
+  odds = odds %>% mutate(Team = map_chr(Team, select_word), odds_frac = ifelse(Odds>0,log((Odds/100)/1),log(1/(Odds/100))))
+  
+  
+  
+  
+  write.csv(odds,'odds.csv',row.names=FALSE)
+  }
+```
+
+```{r record scraping}
+if (file.exists('wins.csv')){
+  wins=read.csv('wins.csv')
+} else {
+  wins = data.frame()
+  for (i in years){
+    url = sprintf('https://www.teamrankings.com/nba/trend/win_trends/is_away?sc=is_home&range=yearly_%s_%s',i,i+1)
+    response = GET(url)
+    html_content = content(response)
+    t = html_table(html_content)[[1]] 
+    t = t %>% mutate(year = i)
+    wins = bind_rows(wins, t)
+  }
+  wins = wins %>% 
+    mutate(WinPCT = as.numeric(str_replace_all(wins$`Win %`,"%","")),
+           Wins = map_chr(`Win-Loss Record`, select_wins)) %>% 
+    dplyr::select(Team, year, WinPCT,Wins)
+  
+  wins = wins %>%
+    mutate(Team = case_when(
+      Team == "Dallas" ~ "Mavericks",
+      Team == "LA Lakers" ~ "Lakers",
+      Team == "Sacramento" ~ "Kings",
+      Team == "Indiana" ~ "Pacers",
+      Team == "San Antonio" ~ "Spurs",
+      Team == "Minnesota" ~ "Timberwolves",
+      Team == "Detroit" ~ "Pistons",
+      Team == "Miami" ~ "Heat",
+      Team == "Memphis" ~ "Grizzlies",
+      Team == "Denver" ~ "Nuggets",
+      Team == "Brooklyn" ~ "Nets",
+      Team == "Utah" ~ "Jazz",
+      Team == "Golden State" ~ "Warriors",
+      Team == "Houston" ~ "Rockets",
+      Team == "New Orleans" ~ "Pelicans",
+      Team == "Milwaukee" ~ "Bucks",
+      Team == "Portland" ~ "Blazers",
+      Team == "Cleveland" ~ "Cavaliers",
+      Team == "New York" ~ "Knicks",
+      Team == "Philadelphia" ~ "76ers",
+      Team == "Okla City" ~ "Thunder",
+      Team == "LA Clippers" ~ "Clippers",
+      Team == "Boston" ~ "Celtics",
+      Team == "Toronto" ~ "Raptors",
+      Team == "Atlanta" ~ "Hawks",
+      Team == "Phoenix" ~ "Suns",
+      Team == "Washington" ~ "Wizards",
+      Team == "Chicago" ~ "Bulls",
+      Team == "Orlando" ~ "Magic",
+      Team == "Charlotte" ~ "Hornets",
+      TRUE ~ NA_character_  # Handle other cases if needed
+    ))
+  write.csv(wins,'wins.csv',row.names=FALSE)
+}
+```
+
+```{r allstars scraping}
+if (file.exists('allstars.csv')){
+  allstars=read.csv('allstars.csv')
+} else {
+
+  allstars = data.frame()
+  for (i in years){
+    url = sprintf('https://basketball.realgm.com/nba/allstar/game/rosters/%s',i)
+    response <- GET(url)
+    html_content <- content(response)
+    x = html_nodes(html_content, 'table.basketball')
+    x = html_table(x)
+    x1 = x[[1]] %>% mutate(year = i)
+    x2 = x[[2]] %>% mutate(year = i)
+    allstars = bind_rows(allstars, x1, x2)
+    
+    
+  }
+  allstars = allstars %>% group_by(Team, year) %>% summarise(num_all_stars = n()) %>% mutate(Team = map_chr(Team, select_word))
+  
+  #All of this is to deal with missing observations when we lag Ie: years without all stars for a team
+  blank_df <- expand.grid(Team = unique(allstars$Team), year = unique(allstars$year))
+  
+  allstars <- merge(blank_df, allstars, by = c("Team", "year"), all.x = TRUE)
+  allstars$num_all_stars[is.na(allstars$num_all_stars)] <- 0
+  
+  
+  allstars = allstars %>% arrange(Team, year) %>% group_by(Team) %>% mutate(lagged = lag(num_all_stars),Team = case_when(Team=='Sixers'~'76ers',TRUE~Team))
+  write.csv(allstars,'allstars.csv',row.names=FALSE)
+}
+```
+
+```{r gini modelling}
+months=c('october','november','december','january','february','march','april')
+y='2018'
+game = data.frame()
+    for (m in months){
+    url = sprintf('https://www.basketball-reference.com/leagues/NBA_%s_games-%s.html',y,m)
+    urb =url
+    response <- GET(url)
+    html_content <- content(response)
+    x = data.frame(html_table(html_content))
+    x= x %>% select(Date,`Visitor.Neutral`,`Home.Neutral`)
+    game = bind_rows(game, x)
+}
+
+
+game2=game %>%
+  mutate(Date = as.Date(Date, format = '%a, %b %d, %Y')) %>%
+  filter(Date < as.Date('2018-04-14')) %>%
+  mutate(Visitor.Neutral=map_chr(Visitor.Neutral, select_word),
+         Home.Neutral = map_chr(Home.Neutral,select_word)) %>%
+  rename(Visitor=Visitor.Neutral, Home = Home.Neutral)
+
+ranks =odds %>%
+  filter(year==2018) %>%
+  arrange(Odds) %>%
+  mutate(Team=map_chr(Team,select_word), rank = 1:n()) %>%
+  select(Team,rank)
+
+
+game2 <- merge(game2, ranks, by.x = "Visitor", by.y = "Team", all.x = TRUE) %>% rename(Visitor_rank = rank)
+
+game2 <- merge(game2, ranks, by.x = "Home", by.y = "Team", all.x = TRUE) %>% rename(Home_rank = rank)
+
+teams=unique(ranks$Team)
+
+most_uneven = list()
+
+for (te in teams){
+  visiting_games = game2 %>% filter(Visitor == te)
+  tally <- sum(visiting_games$Visitor_rank < visiting_games$Home_rank)
+  home_games = game2 %>% filter(Home == te)
+  tally2 <- sum(home_games$Home_rank < home_games$Visitor_rank)
+  games_won = tally+tally2
+  most_uneven = c(most_uneven, games_won)
+
+    }
+maximum_gini2=Gini(unlist(most_uneven))
+maximum_gini = 0.3567143
+
+
+```
+
+```{r}
+winning_gini = wins %>% group_by(year) %>% summarise(winning_gini = Gini(WinPCT)) %>% mutate(adjusted_winning_gini=(winning_gini)/(maximum_gini))
+preseason_gini = odds %>% group_by(year) %>% summarise(preseason_gini = Gini(Odds))
+```
+
+```{r}
+merged = left_join(wins, attendance, by = c('Team','year')) 
+merged = left_join(merged, allstars, by = c('Team','year'))%>% 
+  filter(!is.na(WinPCT),!is.na(PCT),!is.na(lagged),year != 2021) %>% 
+  rename(AttendancePCT = PCT)
+merged = left_join(merged, odds, by =c('Team','year'))
+merged = left_join(merged, winning_gini, by = c('year'))
+merged = left_join(merged, preseason_gini, by = c('year'))
+
+```
+
+## **Introduction**
+
+If you could win any contest you participated in, what would that do to your desire to compete? Would it be fun to be an onlooker to such a contest? It might be fun to revel in such dominance at first, but eventually it would get boring, it simply must. A key aspect of any contest or game is uncertainty. One might enjoy winning more than 50% of the time, but winning 100% of the time would undoubtedly be profoundly boring. Does this intuition hold from a fan's perspective for an individual team or maybe even league wide? This intuition is exactly what I will be exploring in this paper.
+
+> "Oh Lord, make us good, but not that good". `r tufte::quote_footer('-Walter Neale')`
+
+This paper will attempt to shed some light on this dilemma. More specifically, I will be using data from the last 20 years of NBA basketball to explore a relationship between attendance and various measures of captivating game play and certainty of outcome. Intuitively, I believe one would expect competitive balance would lead to more viewership, all else equal. Game's are simply more entertaining when the outcome is unsure. Even Warriors fans got sick of their prolonged dominance in the late 2010's. The empirical evidence is not quite as clear.
+
+## **Literature Review**
+
+Empirically, this basic intuition does not hold as strictly as one might expect. The inspiration for this paper comes from a 2001 article, "Competitive Balance and Attendance: The Case of Major League Baseball"[^1]. Among other things, these authors find little to no effect of competitive balance on game by game attendance. There are a number of other pieces of literature on the topic, such as "An Economic Model of a Professional Sports League"[^2] where the authors formalize some of the intuition I use in the introduction. They argue "Each time strives to put together a level of talent that increases the probability that it will defeat its opponents. However, if the team achieves too much success with respect to the objective of win maximization, the objective of profit maximization may be compromised."
+
+[^1]: Schmidt, M. B., & Berri, D. J. (2001). Competitive balance and attendance. Journal of Sports Economics, 2(2), 145–167. <https://doi.org/10.1177/152700250100200204>
+
+[^2]: El-Hodiri, M., & Quirk, J. (1971). An Economic Model of a Professional Sports League. Journal of Political Economy, 79(6), 1302–1319. <http://www.jstor.org/stable/1830103>
+
+Other authors have retested hypotheses similar to Schmidt and Berri (2001) such as Richardson (2003), Yousefi et al.( 2012), Brandes and Franck (2007), and Gyimesi (2020).
+
+Many of these studies focus on singe game attendance in relation to a number of other control variables. I have dedicated this study to a year long overview. While there is undoubtedly great value in a game by game analysis, I would argue that there is something missing from such examination. For the most part, teams change during the off season, and are static during the regular season (ignoring the events surrounding the trade deadline). Many fans believe in some invisible character of the squad of players their team has put together any given year. Even if games are going poorly, many still hold true to a slow changing belief in their teams true potential. For this reason, I believe there is still value in analyzing a this relationship on a year by year level.
+
+## **Discussion of Data**
+
+There were a number of data sets used in the creation of this analysis. I will be briefly detailing those and providing their sources.
+
+**Fan Attendance**
+
+The first data set necessary for this analysis is information on fan attendance for each NBA team by year. This was scraped from ESPN [^3]. The data takes the form of stadium capacity filled. 100% represents a stadium at max capacity, and 80% represents a stadium with 20% of seats empty. Notably, I have excluded the 2020-2021 season due to COVID limiting the possibility for in person attendance.
+
+[^3]: <http://www.espn.com/nba/attendance/_/year/2022>
+
+```{r attendance trend graph,fig_width=20,echo=F}
+yearly_attendance = attendance %>% filter(!is.na(PCT)) %>% group_by(year) %>% summarise(average_attendance = mean(PCT))
+
+fig1=yearly_attendance %>% 
+  filter(year<2021)%>% 
+  ggplot(aes(x=year,y=average_attendance,label=year))+
+  geom_line(linewidth=2)+
+  labs(title="Figure 1: Leaguewide Average Stadium Capacity Utilization (%)")+
+  scale_x_continuous(breaks = seq(min(yearly_attendance$year), max(yearly_attendance$year), by = 2))+
+  theme_fivethirtyeight()+
+  theme(plot.title = element_text(hjust = 0.5, size = 14))
+
+fig1
+
+```
+
+NBA average attendance displays a consistent pattern year to year. There is a general increase in average attendance, likely explained by the increasing popularity of the NBA in the last 20 years. All values range between the high 80's and the high 90's.
+
+**Team Wins**
+
+The second data set necessary for this analysis is information on team wins by year. Given that attendance for a team is judged for their home games, this win data was similarly restricted to home games. It was scraped from team rankings.com[^4].
+
+[^4]: <https://www.teamrankings.com/nba/trend/win_trends/is_away?sc=is_home&range=yearly_2003_2004>
+
+For this analysis, I've used winning percentage at home as the measure of choice.
+
+::: {style="text-align: center;"}
+Home winning percentages last 20 years
+:::
+
+```{r test,echo=F}
+x = tidy(summary(wins$WinPCT)) %>% 
+  dplyr::select(minimum, median, maximum) %>% 
+  rename(Minimum = minimum, Median = median, Maximum = maximum)
+
+kbl(x)
+```
+
+Notably, the median winning percentage is greater than 50%, as a direct result of a tendency for teams to win slightly more often at home than on the road.
+
+**Preseason Odds**
+
+Preseason betting odds are a measure of a team's chances of winning the championship, and serve as a proxy for wins that is known to fans before the season. While these don't directly effect outcome, they do represent an informed understanding of parity within the league. This data was scraped from basketball reference[^5].
+
+[^5]: <https://www.basketball-reference.com/leagues/NBA_2023_preseason_odds.html>
+
+The average preseason odds for an NBA team over the last 20 years is +6000[^6].
+
+[^6]: -200 odds would mean you wager `$200` for a `$100` payout
+
+
+```{r preseason desc,echo=F,fig.cap='Best and worst odds over the last 20 years'}
+
+preodds=odds %>% group_by(year) %>% 
+  summarise(Worst_Odds=max(Odds),Best_Odds=min(Odds)) %>% 
+  mutate(log_worst_odds =log10(Worst_Odds), log_best_odds = ifelse(Best_Odds<=0, -log10(abs(Best_Odds)), log10(Best_Odds)))
+
+
+plot = preodds %>% 
+  ggplot(aes(x=year)) +
+  geom_point(aes(y= log_worst_odds),size=3,color='orange')+
+  geom_point(aes(y= log_best_odds),size=3,color='lightblue')+
+  geom_segment(aes(x=year, xend = year, y=log_worst_odds, yend=log_best_odds),color='grey')+
+  
+  scale_y_continuous(breaks = c(-2,-1,0,1,2,3,4,5,6),
+                     labels = c(-100,-10,0,10,100,1000,10000,100000,1000000)) +
+  labs(title = "Figure 2: Preseason championship odds", y = "Value",caption='Note: The higher the odds, the lower the championship likelihood') +
+  theme_fivethirtyeight() + 
+  geom_hline(yintercept=0, color = 'black',size=1)+
+  theme(panel.grid.major = element_blank(),
+        panel.background = element_blank())
+plot
+  
+
+
+```
+
+These odds can be used both as a measure for an individual team and the league as a whole for any given year. Low levels of variation in preseason odds can represent a high level of parity in the league.
+
+**Number of All stars**
+
+Information on the number of all stars for each NBA team each year proved useful to this analysis[^7].
+
+[^7]: <https://basketball.realgm.com/nba/allstar/game/rosters/2010>
+
+I'm interested in number of all stars as a proxy for how exciting a team might be in any given year, aside from winning percentage. There is a chance that last season's all stars might be a better predictor of attendance than this years all stars, due to the fact that all stars are unknown for most of the season. This possibility will be explored.
+
+**Gini Coefficient**
+
+The measure of competitive balance used mirrors that of Schmidt and Berri (2001), the **Gini Coefficient**. The Gini coefficient is one of the most popular measures of inequality in data sets. The Gini coefficient can range from 0 to 1. A value of 0 represents absolute balance, and 1 represents absolute inequality. In a set of numbers (3,3,3), the Gini coefficient would be 0. In a set of numbers (1,2,3), the Gini coefficient would be 1/3.
+
+If we were speaking about country wide income, 0 would represent an identical income for the entire country, and 1 would represent the entirety of the countries wealth in the hands of a few individuals.
+
+This Gini coefficient will be used to frame my analysis of competitive balance in the NBA. The two data sets that I will be calculating this coefficient from in my ensuing analysis are wins by team, and preseason odds by team. A notable exception is that for the Gini coefficient on wins by team, the boundaries are not in fact 0 and 1 but in fact `r maximum_gini` and 1[^8]. 
+
+
+```{r, fig.cap='Fig 3 compares Wins by team in the most unequal season possible and one where every team has an identical record'}
+
+worst = data.frame(wins =unlist(most_uneven), label = 'Most Uneven', xx = 1:30)
+best = data.frame(wins = rep(41, 30), label = 'Most Even', xx = 1:30)
+comparison = bind_rows(worst,best)
+plt = comparison %>% 
+  ggplot(aes(x=xx, y = wins, color = label))+
+  geom_line(size=2)+
+  theme_fivethirtyeight()+
+  labs(title = 'Figure 3: Extremes of NBA winning outcomes',color=NULL,y='Wins',x='Team Rank')+
+  theme(axis.title.y = element_text(margin = margin(r = 10)),axis.title.x = element_text(margin = margin(r = 10)))
+plt
+
+```
+
+This is obtained through a simulation of an NBA season where all games are decided by preseason ranking, therefore maximizing the number of wins for the best teams and minimizing wins for the worst teams. The level of inequality is capped at a certain point due to the fact that one team's wins are related to another's losses.
+
+[^8]: This simulation occurred for the 2018 season. The code can be found in RMD. The value will vary slightly by year due to scheduling but will remain in the same general range.
+
+## **Analysis**
+
+### Effects of Captivating Game play
+
+The first relationship I was curious about when examining this data was that between attendance and team outcome. If we want to move forward with the assumption that we want to be "good, but not that good", first we must show that being good is desirable.
+
+I ran two regressions predicting attendance % using wins or preseason odds while including fixed effects for team and year. In both cases, it appeared that the team outcome variable had a highly statistically significant effect on team attendance. According to our results, all else equal, an additional win would lead to 0.26% higher attendance.
+
+```{r slightly more complex regression,echo=F}
+
+library(modelsummary)
+library(estimatr)
+
+
+
+reg1=lm_robust(AttendancePCT~Wins+Team+as.character(year),data=merged)
+
+reg2=lm_robust(AttendancePCT~odds_frac+as.character(year)+Team,data=merged %>% filter(!is.na(Odds)))
+
+cm =c('(Intercept)'='Constant', 'Wins' = 'Wins', 'year' = 'Year','odds_frac'='Log(Odds)')
+
+ms = modelsummary(list(reg1,reg2),gof_omit = "AIC|BIC|RMSE",
+             output = 'kableExtra',
+             coef_map = cm) %>% 
+  kable_styling(full_width= F,position='float_right') %>% add_header_above(c(" "=1,"Team & Year FE"=2)) %>% add_header_above(c('Table 1: Effects of Wins and Preseason Odds on Attendance %' = 3))
+ms
+```
+
+**All Star Effect**
+
+Moving forward with this knowledge that certainty of outcome (in a positive direction) makes a game more enjoyable to attend, I investigate the fun factor of high level players on a team. You might be more likely to attend games in a season if your team is doing better record wise that year, but does the same hold true for having all star level players on your team. All else equal, a fan's team might be more enjoyable to watch if there is simply more "star power". Using the number of all stars on a given team during a year as a measure of this star power, I repeated the above regression including these variables in table 2. I have included measures for number of all stars on a team and a measure for last years all stars. This is a key distinction due to the nature of all star selections.These selections are voted on and finalized during the NBA season. In fact, more than half the season goes by before these players have been declared all stars. Due to this delay, it is very possible that fans respond to last year all star selections, as a sort of "reigning all star".
+
+```{r final regression,echo=F}
+
+
+
+
+reg1=lm_robust(AttendancePCT~Wins+Team+as.character(year)+num_all_stars,data=merged)
+reg2=lm_robust(AttendancePCT~Wins+Team+as.character(year)+num_all_stars+lagged,data=merged)
+
+
+reg3=lm_robust(AttendancePCT~odds_frac+as.character(year)+Team+num_all_stars,data=merged %>% filter(!is.na(Odds)))
+
+reg4=lm_robust(AttendancePCT~odds_frac+as.character(year)+Team+num_all_stars+lagged,data=merged %>% filter(!is.na(Odds)))
+
+
+
+
+cm =c('(Intercept)'='Constant', 'Wins' = 'Wins','odds_frac'='Log(Odds)', 'year' = 'Year','num_all_stars'='# of Allstars','lagged'='Lagged # of Allstars')
+
+ms = modelsummary(list(reg1,reg2,reg3,reg4),gof_omit = "AIC|BIC|RMSE",
+            output = 'kableExtra',
+             coef_map=cm) %>% 
+  kable_styling(full_width=F, position = 'float_right') %>% add_header_above(c(' '=1,'Winning %'=2,"Preseason Odds"=2))%>% add_header_above(c('Table 2: Effects of adding allstar on Attendance %'=5))
+ms
+
+```
+
+Generally, fans seemed to respond to the presence of all stars on their team. In all but the final regression, the number of all stars had a highly statistically significant correlation with the attendance percentage. The lagged all stars seemed to have a statistically significant effect in the winning % regression but not in the preseason odds regression. A potential explanation for this is that the lagged all star is inherently correlated with the preseason odds, given that this information is available when these odds are made and highly relevant to odds makers.
+
+### Effects of League Parity
+
+As mentioned before, this research applies the Gini coefficient to uncover variation in the inequality in team winning percentage and preseason odds.
+
+**Winning Percentage Gini**
+
+The calculated Gini coefficients for team winning percentage over all 19 years have been included below.
+
+```{r gini table,echo=F}
+
+gini=merged %>% group_by(year) %>% summarise(gini=Gini(Wins))
+
+
+fig=gini %>% 
+  ggplot(aes(x=year,y=gini))+
+  geom_line(linewidth=2)+
+  expand_limits(y=0)+
+  scale_x_continuous(breaks = seq(min(yearly_attendance$year), max(yearly_attendance$year), by = 2))+
+  geom_hline(yintercept = maximum_gini, color='red',size=2)+
+  labs(title="Figure 4: Leaguewide Winning Gini by Year", y='Gini')+
+  theme_fivethirtyeight()+
+  theme(plot.title = element_text(hjust = 0.5, size = 14))+
+  theme(axis.title.y = element_text(margin = margin(r = 10)))
+
+fig
+```
+
+The red line indicates the maximum level of possible inequality of records in an NBA season (`r maximum_gini`).
+
+All NBA seasons in this data set sit between 0.1 and 0.2. Our current season, sits squarely in the middle of all of these Gini values. It appears the NBA is generally consistent in its level of outcome based inequality.
+
+
+**Preseason Odds Gini**
+
+The same analysis is then applied to my alternative form of inequality in this data set, inequality in preseason odds. The level of year by year inequality is vastly greater when looking at preseason odds, but this is to be expected as the distance in odds between team 1 and team 30 is massive. 
+
+```{r both gini on attend by year,echo=F}
+attend_trend = merged %>% group_by(year) %>% summarise(AttendancePCT=mean(AttendancePCT),preseason_gini=mean(preseason_gini), win_gini = mean(winning_gini))
+
+
+
+
+reg10=lm_robust(AttendancePCT~year+preseason_gini,data=attend_trend)
+reg11=lm_robust(AttendancePCT~year+win_gini,data=attend_trend)
+
+cm =c('year'='Year', 'preseason_gini' = 'Preseason Gini','win_gini'='Winning Gini')
+
+ms = modelsummary(list(reg10,reg11),gof_omit = "AIC|BIC|RMSE",
+             output = 'kableExtra',
+             coef_map = cm) %>% 
+  kable_styling(full_width=F, position = 'float_right') %>% add_header_above(c('Table 3: Predictive power of Gini on attendance by year'=3))
+ms
+
+
+
+
+
+```
+
+
+Interestingly, preseason gini is a good predictor of league wide attendance in a given season. This is shown numerically in table 3 and graphically in figure 4
+
+```{r}
+
+preds = predict(reg10, attend_trend)
+preds = data.frame(val = preds, label = rep('Predicted',length(preds)), xx = unique(attend_trend$year))
+
+actual = attend_trend$AttendancePCT
+actual = data.frame(val = actual, label = rep('Actual',length(actual)), xx = unique(attend_trend$year))
+
+vals = bind_rows(preds, actual)
+
+plt = vals %>% ggplot(aes(x=xx,y = val,color=label))+
+  geom_line(size=2)+labs(y='Attendance %',x='Year')+
+  labs(color=NULL,title='Figure 5: Predictive Power of Preseason Gini',y='Attendance %')+
+  theme_fivethirtyeight()+theme(
+    axis.title.y = element_text(margin = margin(r = 10))
+  )
+plt
+
+
+```
+
+
+
+
+## **Discussion and Conclusion**
+
+Some of the assumptions that I set out to test proved true, while some proved inconsequential. It appears that on a team by team basis winning leads to attendance. This comes as no large surprise. More interestingly however, the number of all stars on a team in any given year (or prior year) has no effect on attendance. The intuition behind this is surprising, and as explanation I believe we can turn towards the nature of this attendance. Fans of the NBA can choose to either watch a game from home or to attend a game in person. It is very likely that in person attendance represents a greater proportion of die hard fans, and therefore is likely less elastic than at home viewership. There might have been noticeably different results from an analysis done on at home viewership, where the cost of watching or not watching is far lower. When fan's money is on the line, it appears that winning matters above all else.
+
+Speaking more broadly to the data sets used in this research, the inclusion of overall seasons rather than individual games may have played a role in the overall results. The relative size (small) of the data set meant running these regressions on a single team wouldn't be able to return statistically significant results. Additionally, it complicated the ways in which fans respond to uncertainty. On an individual game basis, the data can show fan responses to variation in their team's expected chances to win a given game. When this same analysis is applied to a data set referring to the whole season, attendance is compared to team winning percentage and overall league parity that year. The model does not speak to where the team stands in that landscape of inequality. It might even be that this Gini coefficient tells a more incomplete story than a basic yearly fixed effect. The relationship between league Gini and league viewership might be more concrete.
+
+Regardless of the downfalls in the model. It is interesting to see that the NBA is roughly constant in its levels of inequality. Inequality in winning stays constant due to the nature of one team winning must represent another losing, with a chance for an upset every game. Preseason inequality varies more, but this doesn't correlate with winning or attendance outcomes. This research points to the fact that this inequality isn't factored into fans decisions to attend games. Most principally, these decisions are influenced by the chance of victory. To speak to the initial question in this paper, it doesn't appear that competitive balance is fun. Winning is fun. Fans who attend games enjoy when their team wins. This logic may not hold for at home viewership, as high certainty of outcome in either direction may influence viewership rather than only high certainty of a loss. Fears of being "too good" likely apply disproportionately to home viewership.
