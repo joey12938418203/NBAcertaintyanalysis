@@ -1,7 +1,5 @@
 # Is-certainty-fun-
-This is a project done for a university class on Economics of Sports. 
-
-It investigates the relationship in the NBA between attendance and measures such as leaguewide parity and team success.
+This is a project done for a university class on Economics of Sports. It investigates the relationship in the NBA between attendance and measures such as leaguewide parity and team success. I did a visual redesign and cleaned up my usage of regressions in April 2024.
 
 # To view the project
 

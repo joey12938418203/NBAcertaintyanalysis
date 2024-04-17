@@ -13,7 +13,6 @@ knitr::opts_chunk$set(error = FALSE)
 knitr::opts_chunk$set(warning = FALSE)
 ```
 
-
 ```{r}
 rm(list = ls())
 library(tufte)
@@ -36,7 +35,6 @@ library(estimatr)
 
 years = 2003:2023
 ```
-
 
 ```{r attendance scraping}
 select_word = function(x){
@@ -83,7 +81,6 @@ write.csv(attendance,'attendance.csv',row.names=FALSE)
 
 ```
 
-
 ```{r odds scraping}
 convert_decimal_odds = function(x){
   decimal_odds = ifelse(x>0,
@@ -122,7 +119,6 @@ if (file.exists('odds.csv')){
 
 
 ```
-
 
 ```{r record scraping}
 if (file.exists('wins.csv')){
@@ -180,7 +176,6 @@ if (file.exists('wins.csv')){
 }
 ```
 
-
 ```{r allstars scraping}
 if (file.exists('allstars.csv')){
   allstars=read.csv('allstars.csv')
@@ -213,8 +208,7 @@ if (file.exists('allstars.csv')){
 }
 ```
 
-
-```{r max gini modelling}
+```{r max Gini modelling}
 months=c('october','november','december','january','february','march','april')
 y='2018'
 game = data.frame()
@@ -266,7 +260,6 @@ maximum_gini=Gini(unlist(most_uneven))
 
 ```
 
-
 ```{r merging data}
 
 winning_gini = wins %>% group_by(year) %>% summarise(winning_gini = Gini(WinPCT)) %>% mutate(adjusted_winning_gini=(winning_gini)/(maximum_gini))
@@ -283,7 +276,7 @@ merged = left_join(merged, preseason_gini, by = c('year'))
 
 ```
 
-## **Introduction**
+# Introduction
 
 If you could win any contest you participated in, what would that do to your desire to compete? Would it be fun to be an onlooker to such a contest? It might be fun to revel in such dominance at first, but eventually it must get boring. A key aspect of any contest or game is uncertainty. One might enjoy winning more than 50% of the time, but winning 100% of the time would undoubtedly be profoundly boring. Does this intuition hold from a fan's perspective for an individual team or maybe even league wide? This intuition is exactly what I will be exploring in this paper.
 
@@ -291,7 +284,7 @@ If you could win any contest you participated in, what would that do to your des
 
 This paper will attempt to shed some light on this dilemma. More specifically, I will be using data from the last 20 years of NBA basketball to explore a relationship between attendance and various measures of captivating game play and certainty of outcome. Intuitively, I believe one would expect competitive balance would lead to more viewership, all else equal. Game's are simply more entertaining when the outcome is unsure. Even Warriors fans got sick of their prolonged dominance in the late 2010's. The empirical evidence is not quite as clear.
 
-## **Literature Review**
+# Literature Review
 
 This basic intuition does not hold as strictly as one might expect. The inspiration for this paper comes from a 2001 article, "Competitive Balance and Attendance: The Case of Major League Baseball"[^1]. Among other things, these authors find little to no effect of competitive balance on game by game attendance. There are a number of other pieces of literature on the topic, such as "An Economic Model of a Professional Sports League"[^2] where the authors formalize some of the intuition I use in the introduction. They argue "Each team strives to put together a level of talent that increases the probability that it will defeat its opponents. However, if the team achieves too much success with respect to the objective of win maximization, the objective of profit maximization may be compromised."
 
@@ -303,13 +296,13 @@ Other authors have retested hypotheses similar to Schmidt and Berri (2001) such 
 
 Many of these studies focus on singe game attendance in relation to a number of other control variables. I have dedicated this study to a year long overview. While there is undoubtedly great value in a game by game analysis, I would argue that there is something missing from such examination. For the most part, teams change during the off season, and are static during the regular season (ignoring the events surrounding the trade deadline). Many fans believe in some invisible character of the squad of players their team has put together any given year. Even if games are going poorly, many still hold true to a slow changing belief in their teams true potential. For this reason, I believe there is still value in analyzing a this relationship on a year by year level.
 
-## **Discussion of Data**
+# Data Gathering
 
 There were a number of data sets used in the creation of this analysis. I will be briefly detailing those and providing their sources.
 
 **Fan Attendance**
 
-The first data set necessary for this analysis is information on fan attendance for each NBA team by year. This was scraped from ESPN [^3]. The data takes the form of stadium capacity filled. 100% represents a stadium at max capacity, and 80% represents a stadium with 20% of seats empty. Notably, I have excluded the 2020-2021 season from all subsequent analysis due to COVID limiting the possibility for in person attendance. These remants of covid attendance effects can be seen in the 2021-2022 season but it has been kept in the data set because it falls inline with expected attendance numbers.
+The first data set necessary for this analysis is information on fan attendance for each NBA team by year. This was scraped from ESPN [^3]. The data takes the form of stadium capacity filled. 100% represents a stadium at max capacity, and 80% represents a stadium with 20% of seats empty. Notably, I have excluded the 2020-2021 season from all subsequent analysis due to COVID limiting the possibility for in person attendance. These remnants of COVID attendance effects can be seen in the 2021-2022 season but it has been kept in the data set because it falls inline with expected attendance numbers.
 
 [^3]: <http://www.espn.com/nba/attendance/_/year/2022>
 
@@ -354,13 +347,11 @@ Notably, the median winning percentage is greater than 50%, as a direct result o
 
 **Preseason Odds**
 
-Preseason betting odds are a measure of a team's chances of winning the championship, and serve as a proxy for wins that is known to fans before the season. While these don't directly effect outcome, they do represent an informed understanding of parity within the league. This data was scraped from basketball reference[^5].
+Preseason betting odds are a measure of a team's chances of winning the championship, and serve as a proxy for wins that is known to fans before the season. While these don't directly effect outcome, they do represent an informed understanding of parity within the league. This data was scraped from basketball reference[^5]. These odds were originally in the American format, but were converted into an adapted decimal format[^6].
 
 [^5]: <https://www.basketball-reference.com/leagues/NBA_2023_preseason_odds.html>
 
-The average preseason odds for an NBA team over the last 20 years is +6000[^6].
-
-[^6]: -200 odds would mean you wager `$200` for a `$100` payout. For this project, -200 odds have been converted into 50, which represents the `$50` cash payout of winning this bet (disregarding the `$100` deposit). 
+[^6]: Odds in this format represent the cash payout of winning a bet of `$100`. For example, 1100 odds would mean the payout disregarding the `$100` deposit is `$1100`.
 
 ```{r preseason desc,echo=F}
 
@@ -375,11 +366,10 @@ plot = preodds %>%
   geom_point(aes(y= log_best_odds),size=3,color='lightblue')+
   geom_segment(aes(x=year, xend = year, y=log_worst_odds, yend=log_best_odds),color='grey')+
   
-  scale_y_continuous(breaks = c(-2,-1,0,1,2,3,4,5,6),
-                     labels = c(-100,-10,0,10,100,1000,10000,100000,1000000)) +
-  labs(title = "Figure 2: Need to redo this graph now", y = "Value",caption='Note: The higher the odds, the lower the championship likelihood') +
+  scale_y_continuous(breaks = c(0,1,2,3,4,5,6),
+                     labels = c(0,10,100,1000,10000,100000,1000000)) +
+  labs(title = "Figure 2: Odds disparity by year", y = "Value",caption='Note: The higher the odds, the lower the championship likelihood') +
   theme_fivethirtyeight() + 
-  geom_hline(yintercept=0, color = 'black',size=1)+
   theme(panel.grid.major = element_blank(),
         panel.background = element_blank())
 plot
@@ -425,13 +415,13 @@ plt
 
 This is obtained through a simulation of an NBA season where all games are decided by preseason ranking, therefore maximizing the number of wins for the best teams and minimizing wins for the worst teams. The level of inequality is capped at a certain point due to the fact that one team's wins are related to another's losses.
 
-## **Analysis**
+# Analysis
 
-### Effects of Captivating Game play
+## Effects of Captivating Game play
 
 The first relationship I was curious about when examining this data was that between attendance and team outcome. If we want to move forward with the assumption that we want to be "good, but not that good", first we must show that being good is desirable.
 
-I ran two regressions predicting attendance % using wins or preseason odds while including fixed effects for team and year. In both cases, it appeared that the team outcome variable had a highly statistically significant effect on team attendance. According to our results, all else equal, each additional win leads to 0.26% higher attendance. Additionally, the effect of having a 1% larger payout on a bet for a team to win the championship led to -2.8% less attendance. These results are both statistically significant and in the direction our intuition would expect them to be.
+I ran two regressions predicting attendance % using wins or preseason odds while including fixed effects for team and year. In both cases, it appeared that the team outcome variable had a highly statistically significant effect on team attendance. According to our results, all else equal, each additional win leads to 0.26% higher attendance. Additionally, the effect of having a 1% larger payout on a bet for a team to win the championship led to -2.8% less attendance. These results are both statistically significant and in the direction our intuition would expect them to be. Generally, fans are more likely to attend games when their team is more likely to win.
 
 ```{r slightly more complex regression,echo=F}
 
@@ -480,7 +470,7 @@ ms
 
 Generally, fans seemed to respond to the presence of all stars on their team. In regressions 1 and 2, the effects of an additional all star led to 2-3% higher attendance. In regressions 3 and 4, an additional all star led to an additional 1.7% attendance. In all but the final regression, the number of all stars had a highly statistically significant correlation with the attendance percentage. The lagged all stars seemed to have a statistically significant effect in the winning % regression but not in the preseason odds regression. A potential explanation for this is that the lagged all star is inherently correlated with the preseason odds, given that this information is available when these odds are made and highly relevant to odds makers.
 
-### Effects of League Parity
+## Effects of League Parity
 
 As mentioned before, this research applies the Gini coefficient to uncover variation in the inequality in team winning percentage and preseason odds.
 
@@ -509,7 +499,7 @@ fig
 
 The red line indicates the maximum level of possible inequality of records in an NBA season (`r maximum_gini`).
 
-All NBA seasons in this data set sit between 0.1 and 0.2. Our current season, sits squarely in the middle of all of these Gini values. It appears the NBA is generally consistent in its level of outcome based inequality.
+All NBA seasons in this data set sit between 0.1 and 0.25. Our current season, sits squarely in the middle of all of these Gini values. It appears the NBA is generally consistent in its level of outcome based inequality.
 
 **Preseason Odds Gini**
 
@@ -521,10 +511,10 @@ attend_trend = merged %>% group_by(year) %>% summarise(AttendancePCT=mean(Attend
 
 
 
-reg10=lm_robust(AttendancePCT~year+preseason_gini,data=attend_trend)
-reg11=lm_robust(AttendancePCT~year+win_gini,data=attend_trend)
+reg10=lm_robust(AttendancePCT~year+log(preseason_gini),data=attend_trend)
+reg11=lm_robust(AttendancePCT~year+log(win_gini),data=attend_trend)
 
-cm =c('year'='Year', 'preseason_gini' = 'Preseason Gini','win_gini'='Winning Gini')
+cm =c('year'='Year','log(win_gini)'='Log(Winning Gini)', 'log(preseason_gini)'='Log(Preseason Gini)')
 
 ms = modelsummary(list(reg10,reg11),gof_omit = "AIC|BIC|RMSE",
              output = 'kableExtra',
@@ -538,20 +528,21 @@ ms
 
 ```
 
-Table 3 shows the relationship between yearly league wide average attendance and the league wide gini measures for that season. Gini for team wins has no statistical significance but preseason gini does appear to have a strong statistical significance. The equation used for column 1 is shown below. 
+Table 3 shows the relationship between yearly league wide average attendance and the logged league wide Gini measures for that season. Gini for team wins has no statistical significance but preseason Gini does appear to have a strong statistical significance. The equation used for column 1 is shown below.
 
 $$ 
-\text{Attendance %} = \beta_0+\beta_1\text{preseason gini}+\text{year}+\epsilon
+\text{Attendance %} = \beta_0+\beta_1\text{preseason Gini}+\text{year}+\epsilon
 $$
 
 This same equation is used to predict yearly attendance in figure 5.
+
 ```{r}
 
 preds = predict(reg10, attend_trend)
-preds = data.frame(val = preds, label = rep('Predicted',length(preds)), xx = unique(attend_trend$year))
+preds = data.frame(val = preds, label = rep('Predicted attendance',length(preds)), xx = unique(attend_trend$year))
 
 actual = attend_trend$AttendancePCT
-actual = data.frame(val = actual, label = rep('Actual',length(actual)), xx = unique(attend_trend$year))
+actual = data.frame(val = actual, label = rep('Actual Attendance',length(actual)), xx = unique(attend_trend$year))
 
 vals = bind_rows(preds, actual)
 
@@ -566,10 +557,12 @@ plt
 
 ```
 
-## **Discussion and Conclusion**
+The coefficient for the effects of league wide preseason Gini on league wide attendance show a statistically significant relationship where more odds based disparity leads to more attendance. Our model predicts a 1% increase in the inequality of the distribution of preseason odds leads to 7.8% higher league wide attendance.
 
-Some of the assumptions that I set out to test proved true, while some proved inconsequential. It appears that on a team by team basis winning leads to attendance. This comes as no large surprise. More interestingly however, the number of all stars on a team in any given year (or prior year) has no effect on attendance. The intuition behind this is surprising, and as explanation I believe we can turn towards the nature of this attendance. Fans of the NBA can choose to either watch a game from home or to attend a game in person. It is very likely that in person attendance represents a greater proportion of die hard fans, and therefore is likely less elastic than at home viewership. There might have been noticeably different results from an analysis done on at home viewership, where the cost of watching or not watching is far lower. When fan's money is on the line, it appears that winning matters above all else.
+# Discussion and Conclusion
 
-Speaking more broadly to the data sets used in this research, the inclusion of overall seasons rather than individual games may have played a role in the overall results. The relative size (small) of the data set meant running these regressions on a single team wouldn't be able to return statistically significant results. Additionally, it complicated the ways in which fans respond to uncertainty. On an individual game basis, the data can show fan responses to variation in their team's expected chances to win a given game. When this same analysis is applied to a data set referring to the whole season, attendance is compared to team winning percentage and overall league parity that year. The model does not speak to where the team stands in that landscape of inequality. It might even be that this Gini coefficient tells a more incomplete story than a basic yearly fixed effect. The relationship between league Gini and league viewership might be more concrete.
+Some of the assumptions that I set out to test proved true, while some proved inconsequential. It appears that on a team by team basis winning and being favored by Vegas lead to attendance. This comes as no large surprise. In keeping with general intuition, the number of all stars on a team in any given year also positively influences attendance. Fans of a given team seem to make decisions to attend a game based in part on how fun the game will be, largely judged by if the team is likely to win and if there are high powered players on the team. Walter Neale's worries of being "too good" may not come in to play in a league like the NBA, where prolonged dominance is difficult to achieve and arguably highly entertaining.
 
-Regardless of the downfalls in the model. It is interesting to see that the NBA is roughly constant in its levels of inequality. Inequality in winning stays constant due to the nature of one team winning must represent another losing, with a chance for an upset every game. Preseason inequality varies more, but this doesn't correlate with winning or attendance outcomes. This research points to the fact that this inequality isn't factored into fans decisions to attend games. Most principally, these decisions are influenced by the chance of victory. To speak to the initial question in this paper, it doesn't appear that competitive balance is fun. Winning is fun. Fans who attend games enjoy when their team wins. This logic may not hold for at home viewership, as high certainty of outcome in either direction may influence viewership rather than only high certainty of a loss. Fears of being "too good" likely apply disproportionately to home viewership.
+It may be the case that extremely dominant teams are actually a net positive for the league, as attendance responds positively to years with more inequality in preseason odds across the league. As I showed in figure 3, it might be prohibitively hard for the league to reach a state of such inequality that fans lose interest. Adding to this, the league takes steps to level the playing field, such as the lottery draft. Overall, NBA front offices can read this as good news. They needn't worry about being "too good".
+
+There are some areas for future analysis that I've identified during this work. One particularly interesting one is a measure of preseason Gini including only the top 10 teams in the league. It is a near certainty that the 30th most likely team to win a championship will have abysmal odds. It may be the case that the top 10 teams provide a far more accurate measure of league parity. These findings also ought to be analyzed with viewership as an outcome. I suspect the low commitment nature of TV viewership will affect the decision making of fans.
